@@ -252,19 +252,296 @@ ORDER BY Year, Month;
 
 
 /*===========================================================
+12. PRODUCT REVENUE CONTRIBUTION (CTE)
+===========================================================*/
+
+WITH ProductRevenue AS
+(
+    SELECT
+        Product,
+        SUM(TotalPrice) AS Revenue
+    FROM Orders
+    GROUP BY Product
+)
+
+SELECT
+    Product,
+    Revenue,
+    ROUND((Revenue * 100.0) /
+        (SELECT SUM(Revenue) FROM ProductRevenue),2)
+        AS RevenuePercentage
+FROM ProductRevenue
+ORDER BY Revenue DESC;
+
+/*===========================================================
+13. CUSTOMER RANKING
+===========================================================*/
+
+SELECT
+    CustomerID,
+    SUM(TotalPrice) AS Revenue,
+    RANK() OVER
+    (
+        ORDER BY SUM(TotalPrice) DESC
+    ) AS CustomerRank
+FROM Orders
+GROUP BY CustomerID;
+
+/*===========================================================
+14. RUNNING TOTAL REVENUE
+===========================================================*/
+
+WITH MonthlyRevenue AS
+(
+SELECT
+YEAR(Date) AS Year,
+MONTH(Date) AS Month,
+SUM(TotalPrice) AS Revenue
+FROM Orders
+GROUP BY YEAR(Date),MONTH(Date)
+)
+
+SELECT *,
+SUM(Revenue)
+OVER
+(
+ORDER BY Year,Month
+ROWS BETWEEN UNBOUNDED PRECEDING
+AND CURRENT ROW
+)
+AS RunningRevenue
+FROM MonthlyRevenue;
+
+
+/*===========================================================
+15. MONTH-OVER-MONTH REVENUE
+===========================================================*/
+
+WITH MonthlyRevenue AS
+(
+SELECT
+YEAR(Date) AS Year,
+MONTH(Date) AS Month,
+SUM(TotalPrice) AS Revenue
+FROM Orders
+GROUP BY YEAR(Date),MONTH(Date)
+)
+
+SELECT
+*,
+LAG(Revenue)
+OVER
+(
+ORDER BY Year,Month
+)
+AS PreviousMonthRevenue
+FROM MonthlyRevenue;
+
+
+/*===========================================================
+16. MONTHLY GROWTH %
+===========================================================*/
+
+WITH MonthlyRevenue AS
+(
+SELECT
+YEAR(Date) AS Year,
+MONTH(Date) AS Month,
+SUM(TotalPrice) AS Revenue
+FROM Orders
+GROUP BY YEAR(Date),MONTH(Date)
+)
+
+SELECT
+*,
+LAG(Revenue)
+OVER(ORDER BY Year,Month)
+AS PreviousRevenue,
+
+ROUND(
+
+(
+Revenue-
+LAG(Revenue)
+OVER(ORDER BY Year,Month)
+
+)
+
+*100.0/
+
+LAG(Revenue)
+OVER(ORDER BY Year,Month)
+
+,2)
+
+AS GrowthPercent
+
+FROM MonthlyRevenue;
+
+
+
+
+/*===========================================================
+17. CUSTOMER SEGMENTATION
+===========================================================*/
+
+SELECT
+CustomerID,
+SUM(TotalPrice) AS Revenue,
+
+CASE
+
+WHEN SUM(TotalPrice)>=5000 THEN 'High Value'
+
+WHEN SUM(TotalPrice)>=2500 THEN 'Medium Value'
+
+ELSE 'Low Value'
+
+END AS CustomerSegment
+
+FROM Orders
+
+GROUP BY CustomerID
+
+ORDER BY Revenue DESC;
+
+
+/*===========================================================
+18. HIGHEST REVENUE ORDER PER PRODUCT
+===========================================================*/
+
+WITH RankedOrders AS
+(
+SELECT
+Product,
+OrderID,
+CustomerID,
+TotalPrice,
+
+ROW_NUMBER()
+OVER
+(
+PARTITION BY Product
+ORDER BY TotalPrice DESC
+)
+AS rn
+
+FROM Orders
+)
+
+SELECT *
+FROM RankedOrders
+WHERE rn=1;
+
+
+/*===========================================================
+19. TOP 3 CUSTOMERS PER PRODUCT
+===========================================================*/
+
+WITH RankedCustomers AS
+(
+SELECT
+Product,
+CustomerID,
+SUM(TotalPrice) AS Revenue,
+
+DENSE_RANK()
+OVER
+(
+PARTITION BY Product
+ORDER BY SUM(TotalPrice) DESC
+)
+AS Ranking
+
+FROM Orders
+
+GROUP BY Product,CustomerID
+)
+
+SELECT *
+FROM RankedCustomers
+WHERE Ranking<=3;
+
+
+/*===========================================================
+20. ABOVE AVERAGE ORDERS
+===========================================================*/
+
+SELECT *
+FROM Orders
+
+WHERE TotalPrice>
+
+(
+SELECT AVG(TotalPrice)
+FROM Orders
+)
+
+ORDER BY TotalPrice DESC;
+
+
+/*===========================================================
+21. CANCELLATION RATE
+===========================================================*/
+
+SELECT
+
+COUNT(CASE WHEN OrderStatus='Cancelled' THEN 1 END)
+AS CancelledOrders,
+
+COUNT(*) AS TotalOrders,
+
+ROUND(
+
+COUNT(CASE WHEN OrderStatus='Cancelled' THEN 1 END)
+
+*100.0
+
+/
+
+COUNT(*)
+
+,2)
+
+AS CancellationRate;
+
+/*===========================================================
 11. BUSINESS INSIGHTS
-Key questions answered:
+
+The SQL analysis answers the following business questions:
 
 1. What is the total revenue generated?
-2. Which products generate the most revenue?
-3. Which products sell the highest quantity?
-4. Who are the top customers?
-5. Which payment method is most preferred?
-6. What is the cancellation count?
-7. Which referral source brings most customers?
-8. Which referral source generates maximum revenue?
+2. Which products generate the highest revenue?
+3. Which products have the highest sales volume?
+4. Who are the top revenue-generating customers?
+5. Which payment methods are most frequently used?
+6. Which payment methods contribute the highest revenue?
+7. Which referral sources drive the most customers?
+8. Which referral sources generate the highest revenue?
 9. What is the average order value?
-10. How does revenue change month by month?
+10. How does monthly revenue change over time?
+11. Which products contribute the largest percentage of total revenue?
+12. Who are the highest-ranked customers based on revenue?
+13. What is the cumulative (running) revenue over time?
+14. How does monthly revenue compare with the previous month?
+15. What is the month-over-month revenue growth percentage?
+16. How can customers be segmented into High, Medium, and Low Value groups?
+17. What is the highest-value order for each product?
+18. Who are the top three customers for every product?
+19. Which orders have values above the overall average order value?
+20. What is the overall cancellation rate of customer orders?
+
+Advanced SQL Concepts Demonstrated:
+- Common Table Expressions (CTEs)
+- Window Functions (ROW_NUMBER, RANK, DENSE_RANK, LAG)
+- CASE Expressions
+- Aggregate Functions
+- Subqueries
+- Running Totals
+- Customer Segmentation
+- Business KPI Analysis
 
 ===========================================================*/
+
+
 
